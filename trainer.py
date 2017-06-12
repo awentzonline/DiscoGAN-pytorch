@@ -10,6 +10,7 @@ from torch import nn
 import torch.nn.parallel
 import torchvision.utils as vutils
 from torch.autograd import Variable
+from torchvision.models.vgg import vgg16
 
 from models import *
 from data_loader import get_loader
@@ -56,12 +57,14 @@ class Trainer(object):
             self.G_BA.cuda()
             self.D_A.cuda()
             self.D_B.cuda()
+            self.vgg_features.cuda()
 
         elif self.num_gpu > 1:
             self.G_AB = nn.DataParallel(self.G_AB.cuda(),device_ids=range(self.num_gpu))
             self.G_BA = nn.DataParallel(self.G_BA.cuda(),device_ids=range(self.num_gpu))
             self.D_A = nn.DataParallel(self.D_A.cuda(),device_ids=range(self.num_gpu))
             self.D_B = nn.DataParallel(self.D_B.cuda(),device_ids=range(self.num_gpu))
+            self.vgg_features = nn.DataParallel(self.vgg_features.cuda(),device_ids=range(self.num_gpu))
 
         if self.load_path:
             self.load_model()
@@ -101,6 +104,11 @@ class Trainer(object):
 
             self.D_A.apply(weights_init)
             self.D_B.apply(weights_init)
+
+            self.vgg = vgg16(pretrained=True)
+            self.vgg_features = nn.Sequential(
+                *(self.vgg.features[i] for i in range(11))
+            )
 
     def load_model(self):
         print("[*] Load models from {}...".format(self.load_path))
@@ -225,8 +233,13 @@ class Trainer(object):
             x_ABA = self.G_BA(x_AB)
             x_BAB = self.G_AB(x_BA)
 
-            l_const_A = d(x_ABA, x_A)
-            l_const_B = d(x_BAB, x_B)
+            f_x_A = self.vgg_features(x_A).detach()
+            f_x_B = self.vgg_features(x_B).detach()
+            f_x_ABA = self.vgg_features(x_ABA)
+            f_x_BAB = self.vgg_features(x_BAB)
+
+            l_const_A = d(f_x_ABA, f_x_A)
+            l_const_B = d(f_x_BAB, f_x_B)
 
             if self.loss == "log_prob":
                 l_gan_A = bce(self.D_A(x_BA), real_tensor)
