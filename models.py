@@ -41,7 +41,7 @@ class GeneratorCNN(nn.Module):
         return self.main(x)
 
 class DiscriminatorCNN(nn.Module):
-    def __init__(self, input_channel, output_channel, hidden_dims, num_gpu):
+    def __init__(self, input_channel, hidden_dims, num_gpu):
         super(DiscriminatorCNN, self).__init__()
         self.num_gpu = num_gpu
         self.layers = []
@@ -56,8 +56,7 @@ class DiscriminatorCNN(nn.Module):
             self.layers.append(nn.LeakyReLU(0.2, inplace=True))
             prev_dim = out_dim
 
-        self.layers.append(nn.Conv2d(prev_dim, output_channel, 4, 1, 0, bias=False))
-        self.layers.append(nn.Sigmoid())
+        self.layers.append(nn.Conv2d(prev_dim, 1, 4, 1, 0, bias=False))
 
         self.layer_module = nn.ModuleList(self.layers)
 

@@ -40,6 +40,8 @@ train_arg.add_argument('--beta2', type=float, default=0.999)
 train_arg.add_argument('--loss', type=str, default="log_prob",
                        choices=["log_prob"], help="least square loss doesn't work well")
 train_arg.add_argument('--weight_decay', type=float, default=0.0001)
+train_arg.add_argument('--weight_clip', type=float, default=0.01)
+train_arg.add_argument('--d_steps', type=int, default=5)
 
 # Misc
 misc_arg = add_argument_group('Misc')

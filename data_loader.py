@@ -37,8 +37,8 @@ def pix2pix_split_images(root):
 
         height, width, channel = data.shape
 
-        a_image = Image.fromarray(data[:,:width/2].astype(np.uint8))
-        b_image = Image.fromarray(data[:,width/2:].astype(np.uint8))
+        a_image = Image.fromarray(data[:,:width//2].astype(np.uint8))
+        b_image = Image.fromarray(data[:,width//2:].astype(np.uint8))
 
         a_image.save(a_image_path)
         b_image.save(b_image_path)
@@ -59,8 +59,8 @@ class Dataset(torch.utils.data.Dataset):
         self.shape = list(Image.open(self.paths[0]).size) + [3]
 
         self.transform = transforms.Compose([
-            transforms.Scale(scale_size), 
-            transforms.ToTensor(), 
+            transforms.Scale(scale_size),
+            transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
         ])
 

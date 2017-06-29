@@ -40,6 +40,8 @@ class Trainer(object):
         self.batch_size = config.batch_size
         self.weight_decay = config.weight_decay
         self.cnn_type = config.cnn_type
+        self.weight_clip = config.weight_clip
+        self.d_steps = config.d_steps
 
         self.model_dir = config.model_dir
         self.load_path = config.load_path
@@ -71,8 +73,8 @@ class Trainer(object):
             self.G_AB = GeneratorFC(2, 2, [config.fc_hidden_dim] * config.g_num_layer)
             self.G_BA = GeneratorFC(2, 2, [config.fc_hidden_dim] * config.g_num_layer)
 
-            self.D_A = DiscriminatorFC(2, 1, [config.fc_hidden_dim] * config.d_num_layer)
-            self.D_B = DiscriminatorFC(2, 1, [config.fc_hidden_dim] * config.d_num_layer)
+            self.D_A = DiscriminatorFC(2, [config.fc_hidden_dim] * config.d_num_layer)
+            self.D_B = DiscriminatorFC(2, [config.fc_hidden_dim] * config.d_num_layer)
         else:
             a_height, a_width, a_channel = self.a_data_loader.shape
             b_height, b_width, b_channel = self.b_data_loader.shape
@@ -92,9 +94,9 @@ class Trainer(object):
                     b_channel, a_channel, conv_dims, deconv_dims, self.num_gpu)
 
             self.D_A = DiscriminatorCNN(
-                    a_channel, 1, conv_dims, self.num_gpu)
+                    a_channel, conv_dims, self.num_gpu)
             self.D_B = DiscriminatorCNN(
-                    b_channel, 1, conv_dims, self.num_gpu)
+                    b_channel, conv_dims, self.num_gpu)
 
             self.G_AB.apply(weights_init)
             self.G_BA.apply(weights_init)
@@ -171,6 +173,49 @@ class Trainer(object):
         vutils.save_image(valid_x_B.data, '{}/valid_x_B.png'.format(self.model_dir))
 
         for step in trange(self.start_step, self.max_step):
+            for d_step in range(self.d_steps):
+                try:
+                    x_A, x_B = A_loader.next(), B_loader.next()
+                except StopIteration:
+                    A_loader, B_loader = iter(self.a_data_loader), iter(self.b_data_loader)
+                    x_A, x_B = A_loader.next(), B_loader.next()
+                if x_A.size(0) != x_B.size(0):
+                    print("[!] Sampled dataset from A and B have different # of data. Try resampling...")
+                    continue
+
+                x_A, x_B = self._get_variable(x_A), self._get_variable(x_B)
+
+                batch_size = x_A.size(0)
+                real_tensor.data.resize_(batch_size).fill_(real_label)
+                fake_tensor.data.resize_(batch_size).fill_(fake_label)
+
+                # update D network
+                self.D_A.zero_grad()
+                self.D_B.zero_grad()
+
+                x_AB = self.G_AB(x_A).detach()
+                x_BA = self.G_BA(x_B).detach()
+
+                x_ABA = self.G_BA(x_AB).detach()
+                x_BAB = self.G_AB(x_BA).detach()
+
+                l_d_A_real = torch.mean(self.D_A(x_A))
+                l_d_A_fake = torch.mean(self.D_A(x_BA))
+                l_d_B_real = torch.mean(self.D_B(x_B))
+                l_d_B_fake = torch.mean(self.D_B(x_AB))
+
+                l_d_A = l_d_A_real - l_d_A_fake
+                l_d_B = l_d_B_real - l_d_B_fake
+
+                l_d = l_d_A + l_d_B
+
+                l_d.backward()
+                optimizer_d.step()
+                # WGAN weight clipping
+                for parameters in (self.D_A.parameters(), self.D_B.parameters()):
+                    for p in parameters:
+                        p.data.clamp_(-self.weight_clip, self.weight_clip)
+
             try:
                 x_A, x_B = A_loader.next(), B_loader.next()
             except StopIteration:
@@ -179,41 +224,7 @@ class Trainer(object):
             if x_A.size(0) != x_B.size(0):
                 print("[!] Sampled dataset from A and B have different # of data. Try resampling...")
                 continue
-
             x_A, x_B = self._get_variable(x_A), self._get_variable(x_B)
-
-            batch_size = x_A.size(0)
-            real_tensor.data.resize_(batch_size).fill_(real_label)
-            fake_tensor.data.resize_(batch_size).fill_(fake_label)
-
-            # update D network
-            self.D_A.zero_grad()
-            self.D_B.zero_grad()
-
-            x_AB = self.G_AB(x_A).detach()
-            x_BA = self.G_BA(x_B).detach()
-
-            x_ABA = self.G_BA(x_AB).detach()
-            x_BAB = self.G_AB(x_BA).detach()
-
-            if self.loss == "log_prob":
-                l_d_A_real, l_d_A_fake = bce(self.D_A(x_A), real_tensor), bce(self.D_A(x_BA), fake_tensor)
-                l_d_B_real, l_d_B_fake = bce(self.D_B(x_B), real_tensor), bce(self.D_B(x_AB), fake_tensor)
-            elif self.loss == "least_square":
-                l_d_A_real, l_d_A_fake = \
-                    0.5 * torch.mean((self.D_A(x_A) - 1)**2), 0.5 * torch.mean((self.D_A(x_BA))**2)
-                l_d_B_real, l_d_B_fake = \
-                    0.5 * torch.mean((self.D_B(x_B) - 1)**2), 0.5 * torch.mean((self.D_B(x_AB))**2)
-            else:
-                raise Exception("[!] Unkown loss type: {}".format(self.loss))
-
-            l_d_A = l_d_A_real + l_d_A_fake
-            l_d_B = l_d_B_real + l_d_B_fake
-
-            l_d = l_d_A + l_d_B
-
-            l_d.backward()
-            optimizer_d.step()
 
             # update G network
             self.G_AB.zero_grad()
@@ -228,14 +239,8 @@ class Trainer(object):
             l_const_A = d(x_ABA, x_A)
             l_const_B = d(x_BAB, x_B)
 
-            if self.loss == "log_prob":
-                l_gan_A = bce(self.D_A(x_BA), real_tensor)
-                l_gan_B = bce(self.D_B(x_AB), real_tensor)
-            elif self.loss == "least_square":
-                l_gan_A = 0.5 * torch.mean((self.D_A(x_BA) - 1)**2)
-                l_gan_B = 0.5 * torch.mean((self.D_B(x_AB) - 1)**2)
-            else:
-                raise Exception("[!] Unkown loss type: {}".format(self.loss))
+            l_gan_A = torch.mean(self.D_A(x_BA))
+            l_gan_B = torch.mean(self.D_B(x_AB))
 
             l_g = l_gan_A + l_gan_B + l_const_A + l_const_B
 
