@@ -3,6 +3,8 @@ from torch import nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from torch.utils.data import TensorDataset, DataLoader
+from torchvision.models.vgg import vgg16
+
 
 class GeneratorCNN(nn.Module):
     def __init__(self, input_channel, output_channel, conv_dims, deconv_dims, num_gpu):
@@ -46,13 +48,17 @@ class DiscriminatorCNN(nn.Module):
         self.num_gpu = num_gpu
         self.layers = []
 
-        prev_dim = hidden_dims[0]
-        self.layers.append(nn.Conv2d(input_channel, prev_dim, 4, 2, 1, bias=False))
-        self.layers.append(nn.LeakyReLU(0.2, inplace=True))
+        self.vgg = vgg16(pretrained=True)
+        self.vgg_features = nn.Sequential(
+            *(self.vgg.features[i] for i in range(19))
+        )
+        for p in self.vgg_features.parameters():
+            p.requires_grad = False
 
-        for out_dim in hidden_dims[1:]:
+        prev_dim = 512  # conv4_1
+        for out_dim in hidden_dims:
             self.layers.append(nn.Conv2d(prev_dim, out_dim, 4, 2, 1, bias=False))
-            self.layers.append(nn.BatchNorm2d(out_dim))
+            #self.layers.append(nn.BatchNorm2d(out_dim))
             self.layers.append(nn.LeakyReLU(0.2, inplace=True))
             prev_dim = out_dim
 
@@ -62,7 +68,7 @@ class DiscriminatorCNN(nn.Module):
         self.layer_module = nn.ModuleList(self.layers)
 
     def main(self, x):
-        out = x
+        out = self.vgg_features(x)
         for layer in self.layer_module:
             out = layer(out)
         return out.view(out.size(0), -1)

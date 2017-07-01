@@ -22,6 +22,9 @@ def weights_init(m):
         m.weight.data.normal_(1.0, 0.02)
         m.bias.data.fill_(0)
 
+def trainable_params(params):
+    return (p for p in params if p.requires_grad)
+
 class Trainer(object):
     def __init__(self, config, a_data_loader, b_data_loader):
         self.config = config
@@ -92,9 +95,9 @@ class Trainer(object):
                     b_channel, a_channel, conv_dims, deconv_dims, self.num_gpu)
 
             self.D_A = DiscriminatorCNN(
-                    a_channel, 1, conv_dims, self.num_gpu)
+                    a_channel, 1, [128], self.num_gpu)
             self.D_B = DiscriminatorCNN(
-                    b_channel, 1, conv_dims, self.num_gpu)
+                    b_channel, 1, [128], self.num_gpu)
 
             self.G_AB.apply(weights_init)
             self.G_BA.apply(weights_init)
@@ -158,7 +161,7 @@ class Trainer(object):
             raise Exception("[!] Caution! Paper didn't use {} opimizer other than Adam".format(config.optimizer))
 
         optimizer_d = optimizer(
-            chain(self.D_A.parameters(), self.D_B.parameters()),
+            trainable_params(chain(self.D_A.parameters(), self.D_B.parameters())),
             lr=self.lr, betas=(self.beta1, self.beta2), weight_decay=self.weight_decay)
         optimizer_g = optimizer(
             chain(self.G_AB.parameters(), self.G_BA.parameters()),
