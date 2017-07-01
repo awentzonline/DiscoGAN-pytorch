@@ -167,8 +167,8 @@ class Trainer(object):
         A_loader, B_loader = iter(self.a_data_loader), iter(self.b_data_loader)
         valid_x_A, valid_x_B = self._get_variable(A_loader.next()), self._get_variable(B_loader.next())
 
-        vutils.save_image(valid_x_A.data, '{}/valid_x_A.png'.format(self.model_dir))
-        vutils.save_image(valid_x_B.data, '{}/valid_x_B.png'.format(self.model_dir))
+        vutils.save_image(valid_x_A.data, '{}/valid_x_A.png'.format(self.model_dir), normalize=True)
+        vutils.save_image(valid_x_B.data, '{}/valid_x_B.png'.format(self.model_dir), normalize=True)
 
         for step in trange(self.start_step, self.max_step):
             try:
@@ -273,10 +273,10 @@ class Trainer(object):
         x_AB_path = '{}/{}_x_AB.png'.format(path, idx)
         x_ABA_path = '{}/{}_x_ABA.png'.format(path, idx)
 
-        vutils.save_image(x_AB.data, x_AB_path)
+        vutils.save_image(x_AB.data, x_AB_path, normalize=True)
         print("[*] Samples saved: {}".format(x_AB_path))
 
-        vutils.save_image(x_ABA.data, x_ABA_path)
+        vutils.save_image(x_ABA.data, x_ABA_path, normalize=True)
         print("[*] Samples saved: {}".format(x_ABA_path))
 
     def generate_with_B(self, inputs, path, idx=None):
@@ -286,10 +286,10 @@ class Trainer(object):
         x_BA_path = '{}/{}_x_BA.png'.format(path, idx)
         x_BAB_path = '{}/{}_x_BAB.png'.format(path, idx)
 
-        vutils.save_image(x_BA.data, x_BA_path)
+        vutils.save_image(x_BA.data, x_BA_path, normalize=True)
         print("[*] Samples saved: {}".format(x_BA_path))
 
-        vutils.save_image(x_BAB.data, x_BAB_path)
+        vutils.save_image(x_BAB.data, x_BAB_path, normalize=True)
         print("[*] Samples saved: {}".format(x_BAB_path))
 
     def generate_infinitely(self, inputs, path, input_type, count=10, nrow=2, idx=None):
@@ -303,7 +303,7 @@ class Trainer(object):
             out = model(out)
 
             out_path = '{}/{}_x_{}_#{}.png'.format(path, idx, input_type, step)
-            vutils.save_image(out.data, out_path, nrow=nrow)
+            vutils.save_image(out.data, out_path, nrow=nrow, normalize=True)
             print("[*] Samples saved: {}".format(out_path))
 
     def test(self):
@@ -322,8 +322,8 @@ class Trainer(object):
                 print("[!] Test sample generation finished. Samples are in {}".format(test_dir))
                 break
 
-            vutils.save_image(x_A.data, '{}/{}_x_A.png'.format(test_dir, step))
-            vutils.save_image(x_B.data, '{}/{}_x_B.png'.format(test_dir, step))
+            vutils.save_image(x_A.data, '{}/{}_x_A.png'.format(test_dir, step), normalize=True)
+            vutils.save_image(x_B.data, '{}/{}_x_B.png'.format(test_dir, step), normalize=True)
 
             self.generate_with_A(x_A, test_dir, idx=step)
             self.generate_with_B(x_B, test_dir, idx=step)
